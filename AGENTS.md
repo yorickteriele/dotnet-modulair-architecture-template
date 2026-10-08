@@ -1,6 +1,6 @@
 # Project conventions
 
-This is an Aresis-inspired modular monolith without tenancy. Read README.md before changes.
+This is a modular monolith without tenancy. Read README.md before changes.
 
 - Use the existing checkout. Do not create worktrees unless explicitly requested.
 - Keep modules in Api, Application, Contracts, Domain, Infrastructure and Tests layers.

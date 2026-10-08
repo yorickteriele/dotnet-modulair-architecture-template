@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Scaffold the six Aresis layers and register the module with the host and solution."""
+"""Scaffold the six module layers and register the module with the host and solution."""
 import argparse
 import re
 import shutil

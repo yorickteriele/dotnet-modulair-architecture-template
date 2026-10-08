@@ -1,6 +1,6 @@
 # Modular .NET project starter
 
-An Aresis-inspired modular monolith with .NET 10, PostgreSQL, React 19, TypeScript, Vite, Tailwind CSS and Zustand. Identity is included. There is no tenancy, booking, billing, email-provider or blob-storage dependency.
+A modular monolith with .NET 10, PostgreSQL, React 19, TypeScript, Vite, Tailwind CSS and Zustand. Identity is included. There is no tenancy, booking, billing, email-provider or blob-storage dependency.
 
 ## Quick start
 
