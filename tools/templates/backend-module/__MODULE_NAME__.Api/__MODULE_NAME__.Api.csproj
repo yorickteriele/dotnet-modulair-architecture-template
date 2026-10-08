@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="../__MODULE_NAME__.Application/__MODULE_NAME__.Application.csproj" />
+    <ProjectReference Include="../__MODULE_NAME__.Contracts/__MODULE_NAME__.Contracts.csproj" />
+    <ProjectReference Include="../__MODULE_NAME__.Infrastructure/__MODULE_NAME__.Infrastructure.csproj" />
+    <ProjectReference Include="../../Module.Abstractions/Module.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

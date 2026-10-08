@@ -1,0 +1,10 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+**/api/generated/
+**/openapi/
+**/TestResults/
+.env
+.local/
+**/*.tsbuildinfo
