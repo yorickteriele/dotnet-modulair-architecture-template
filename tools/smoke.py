@@ -7,11 +7,11 @@ import urllib.request
 
 base = os.environ.get("SMOKE_API_URL", "http://127.0.0.1:5001")
 
-def request(path, body=None, token=None):
+def request(path, body=None, token=None, origin=base):
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = "Bearer " + token
-    req = urllib.request.Request(base + path, data=json.dumps(body).encode() if body is not None else None, headers=headers)
+    req = urllib.request.Request(origin + path, data=json.dumps(body).encode() if body is not None else None, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=20) as response:
             raw = response.read()
@@ -22,7 +22,8 @@ def request(path, body=None, token=None):
 email = f"smoke-{uuid.uuid4().hex}@example.com"
 password = "Local-smoke-" + uuid.uuid4().hex
 path = "/api/v1/Identity/auth"
-assert request("/health") == (200, "Healthy")
+health_url = os.environ.get("SMOKE_HEALTH_URL", base + "/health")
+assert request("", origin=health_url) == (200, "Healthy")
 assert request(path + "/me")[0] == 401
 assert request(path + "/register", {"email": "invalid", "password": "weak", "displayName": "Test"})[0] == 400
 status, profile = request(path + "/register", {"email": email, "password": password, "displayName": "Smoke Test"})

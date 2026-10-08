@@ -88,8 +88,42 @@ python3 tools/smoke.py  # API and PostgreSQL must be running locally
 
 The smoke check creates a uniquely named local account and tests health, invalid input, registration, duplicate email rejection, wrong-password rejection, successful login, an authorized profile request, tampered JWT rejection and account lockout. These accounts remain in the local development database. Use it only with disposable development/test data.
 
-CI repeats setup against PostgreSQL on Ubuntu. npm uses `npm ci`; NuGet restores with committed `packages.lock.json` files and locked mode. If changing dependencies intentionally, update the lockfiles with `npm install` or `dotnet restore --force-evaluate` and review them.
+npm uses `npm ci`; NuGet restores with committed `packages.lock.json` files and locked mode. If changing dependencies intentionally, update the lockfiles with `npm install` or `dotnet restore --force-evaluate` and review them.
+
+## Package pipeline
+
+GitHub Actions runs the stages in order:
+
+1. **Backend tests** with Release configuration and saved TRX results.
+2. **Backend package**: publish the host and MigrationRunner, then build one .NET runtime Docker image.
+3. **API clients**: run that packaged backend against disposable PostgreSQL, apply migrations, fetch OpenAPI and run NSwag. Archive the specs and generated clients and smoke-test authentication.
+4. **Frontend package**: download the generated clients, build TypeScript/Vite and package the static files in nginx. Test both packaged applications together, including SPA routing and authentication through the frontend proxy.
+5. **Publish packages**: push those exact tested images to GitHub Container Registry, without rebuilding.
+
+Pull requests and branch pushes run tests and package builds. Publication runs only on pushes to `main` and `v*` tags, using GitHub's built-in token; no personal access token is needed. Both images get a `sha-<full commit>` tag. Main also updates `latest`; a release such as `v1.0.0` adds that version tag. Image names derive from the repository you create from this template:
+
+```text
+ghcr.io/<owner>/<repository>/backend
+ghcr.io/<owner>/<repository>/frontend
+```
+
+The backend image contains `/app/host/Host.dll` and `/app/migrations/MigrationRunner.dll`. Run migrations explicitly before starting the API, using the same runtime environment variables and database connection. For example, `docker run --rm --env-file <runtime-env-file> --entrypoint dotnet <backend-image> /app/migrations/MigrationRunner.dll` (attach the appropriate database network).
+
+Both images listen on port 8080. Put them on the same Docker network with the backend named or aliased `backend`: nginx proxies `/api/` to `http://backend:8080` and serves the frontend with SPA fallback. Published images contain no development credentials. Supply your runtime database connection, JWT secret, issuer and audience separately. The pipeline uses fresh credentials only for its disposable test containers.
+
+To reproduce packaging locally after activating .NET and Node:
+
+```bash
+dotnet test src/Starter.slnx -c Release -m:2
+./tools/ci/package-backend.sh
+(cd src/frontend && npm ci)
+GENERATE_CLIENTS=1 ./tools/ci/test-packages.sh
+./tools/ci/package-frontend.sh
+FRONTEND_IMAGE=starter-frontend:local ./tools/ci/test-packages.sh
+```
+
+Generated clients and image archives are passed between jobs as artifacts for the same commit. Publishing has `packages: write` permission only in the final job; fork pull requests never receive registry publication credentials.
 
 ## Deployment configuration
 
-Supply your own database connection and JWT signing key through your secret manager. Never reuse local `.env` credentials. Configure `ASPNETCORE_ENVIRONMENT=Production`, your issuer/audience, TLS at your ingress and a same-origin frontend/API reverse proxy. Trust forwarded headers only from your ingress if you add that middleware. The development Vite proxy is not a production server. Deployment/provider integrations are intentionally left to each project.
+Supply your own database connection and JWT signing key through your secret manager. Never reuse local `.env` credentials. Configure `ASPNETCORE_ENVIRONMENT=Production`, your issuer/audience, TLS at your ingress and a same-origin frontend/API reverse proxy. Trust forwarded headers only from your ingress if you add that middleware. The packaged frontend supplies the same-origin nginx proxy; the development Vite proxy is not a production server. Deployment/provider integrations are intentionally left to each project.

@@ -1,11 +1,62 @@
-name: Validate starter
+name: Test, package and publish
 on:
   push:
+    branches: ['**']
+    tags: ['v*']
   pull_request:
+  workflow_dispatch:
+
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  BACKEND_IMAGE: starter-backend:${{ github.sha }}
+  FRONTEND_IMAGE: starter-frontend:${{ github.sha }}
+
 jobs:
-  validate:
+  backend-test:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet restore src/Starter.slnx --locked-mode
+      - run: dotnet test src/Starter.slnx --no-restore -c Release -m:2 --logger trx --results-directory .local/test-results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-test-results-${{ github.sha }}
+          path: .local/test-results/*.trx
+          if-no-files-found: error
+
+  backend-package:
+    name: Backend package
+    needs: backend-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Publish backend and migration runner, build image
+        run: ./tools/ci/package-backend.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-image-${{ github.sha }}
+          path: .local/packages/backend-image.tar
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
+
+  generate-api-clients:
+    name: Generate API clients from the backend package
+    needs: backend-package
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,5 +68,97 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: src/frontend/package-lock.json
-      - name: Setup, build, unit tests and auth smoke
-        run: ./tools/setup.sh
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-image-${{ github.sha }}
+          path: .local/packages
+      - run: docker load --input .local/packages/backend-image.tar
+      - run: npm ci --prefix src/frontend
+      - name: Migrate a disposable database, generate clients, smoke-test packaged backend
+        env:
+          GENERATE_CLIENTS: '1'
+          FRONTEND_IMAGE: ''
+        run: ./tools/ci/test-packages.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: api-clients-${{ github.sha }}
+          path: .local/packages/api-clients.tar.gz
+          retention-days: 7
+          if-no-files-found: error
+
+  frontend-package:
+    name: Frontend package
+    needs: [backend-package, generate-api-clients]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - uses: actions/download-artifact@v4
+        with:
+          name: api-clients-${{ github.sha }}
+          path: .local/packages
+      - run: tar -xzf .local/packages/api-clients.tar.gz -C src/frontend
+      - name: Build frontend with generated clients and package nginx image
+        run: ./tools/ci/package-frontend.sh
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-image-${{ github.sha }}
+          path: .local/packages
+      - run: docker load --input .local/packages/backend-image.tar
+      - name: Smoke-test both packages and the frontend API proxy
+        run: ./tools/ci/test-packages.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-image-${{ github.sha }}
+          path: .local/packages/frontend-image.tar
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
+
+  publish-packages:
+    name: Publish packages to GHCR
+    needs: [backend-package, frontend-package]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-image-${{ github.sha }}
+          path: packages
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-image-${{ github.sha }}
+          path: packages
+      - run: |
+          docker load --input packages/backend-image.tar
+          docker load --input packages/frontend-image.tar
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish the tested images without rebuilding
+        shell: bash
+        run: |
+          set -euo pipefail
+          repository="ghcr.io/${GITHUB_REPOSITORY,,}"
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            channel="$GITHUB_REF_NAME"
+          else
+            channel=latest
+          fi
+          for component in backend frontend; do
+            source="starter-${component}:${GITHUB_SHA}"
+            destination="${repository}/${component}"
+            docker tag "$source" "${destination}:sha-${GITHUB_SHA}"
+            docker push "${destination}:sha-${GITHUB_SHA}"
+            docker tag "$source" "${destination}:${channel}"
+            docker push "${destination}:${channel}"
+          done
