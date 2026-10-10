@@ -49,7 +49,7 @@ done
 # Every window loads .env itself, so restarting a command in its pane picks up changes.
 ENV='set -a; source .env; set +a;'
 tmux new-session -d -s "$SESSION" -n api -c "$ROOT"
-tmux send-keys -t "$SESSION:api" "$ENV dotnet watch --project src/backend/Host run --no-launch-profile" C-m
+tmux send-keys -t "$SESSION:api" "$ENV DOTNET_WATCH_RESTART_ON_RUDE_EDIT=true dotnet watch --project src/backend/Host run --no-launch-profile" C-m
 tmux new-window -t "$SESSION" -n web -c "$ROOT"
 tmux send-keys -t "$SESSION:web" "cd src/frontend && node node_modules/vite/bin/vite.js --host 127.0.0.1" C-m
 tmux new-window -t "$SESSION" -n db -c "$ROOT"
