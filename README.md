@@ -4,7 +4,7 @@ A modular monolith with .NET 10, PostgreSQL, React 19, TypeScript, Vite, Tailwin
 
 ## Quick start
 
-Use this repository as a GitHub template, or clone it into your new project's directory. Prerequisites: .NET SDK **10.0.401**, Node **24 LTS**, Docker with Compose, Python 3 and curl. Linux/macOS commands below also work in WSL2.
+Use this repository as a GitHub template, or clone it into your new project's directory. Prerequisites: .NET SDK **10.0.401**, Node **24 LTS**, Docker with Compose, Python 3 and curl (and tmux for `./start.sh`). Linux/macOS commands below also work in WSL2.
 
 ```bash
 ./tools/setup.sh
@@ -12,6 +12,8 @@ Use this repository as a GitHub template, or clone it into your new project's di
 ```
 
 Setup generates a private, ignored `.env` with fresh local credentials, installs pinned dependencies, starts PostgreSQL, applies migrations, generates TypeScript clients, builds both applications, runs unit tests and exercises the auth API. Existing `.env` files are preserved. Setup can be run again. It leaves PostgreSQL running and stops its temporary API process.
+
+Or start everything in one tmux session with `./start.sh`. It runs setup the first time, waits until PostgreSQL is healthy, applies migrations and opens windows for the API (`api`), Vite (`web`) and a psql shell (`db`). Use `./start.sh --detach` to start without attaching and `./start.sh stop` to stop the session.
 
 In containers with low inotify limits, use `export DOTNET_USE_POLLING_FILE_WATCHER=1` before starting development.
 
