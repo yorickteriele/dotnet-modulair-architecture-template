@@ -1,0 +1,17 @@
+name: Load image
+description: Downloads a packaged image artifact from an earlier job and loads it into Docker.
+
+inputs:
+  component:
+    description: The packaged component, backend or frontend.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: ${{ inputs.component }}-image-${{ github.sha }}
+        path: .local/packages
+    - shell: bash
+      run: docker load --input .local/packages/${{ inputs.component }}-image.tar

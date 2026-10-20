@@ -70,10 +70,6 @@ docker run --rm --network "$network" --env-file "$credentials/backend.env" \
 docker run -d --name "$backend" --network "$network" --network-alias backend \
   --env-file "$credentials/backend.env" --publish "127.0.0.1:${api_port}:8080" "$backend_image" >/dev/null
 wait_for_http "http://127.0.0.1:${api_port}/health" "$backend"
-if [[ "${GENERATE_CLIENTS:-0}" == 1 ]]; then
-  (cd src/frontend && OPENAPI_BASE_URL="http://127.0.0.1:${api_port}" npm run generate)
-  node tools/ci/archive-clients.mjs
-fi
 smoke_url="http://127.0.0.1:${api_port}"
 if [[ -n "$frontend_image" ]]; then
   docker run -d --name "$frontend" --network "$network" \
