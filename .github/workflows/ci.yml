@@ -23,9 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          global-json-file: global.json
+      - uses: ./.github/actions/setup
       - run: dotnet restore src/Starter.slnx --locked-mode
       - run: dotnet test src/Starter.slnx --no-restore -c Release -m:2 --logger trx --results-directory .local/test-results
       - uses: actions/upload-artifact@v4
@@ -41,9 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          global-json-file: global.json
+      - uses: ./.github/actions/setup
       - name: Publish backend and migration runner, build image
         run: ./tools/ci/package-backend.sh
       - uses: actions/upload-artifact@v4
@@ -55,30 +51,19 @@ jobs:
           if-no-files-found: error
 
   generate-api-clients:
-    name: Generate API clients from the backend package
-    needs: backend-package
+    name: Generate API clients
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: ./.github/actions/setup
         with:
-          global-json-file: global.json
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: src/frontend/package-lock.json
-      - uses: actions/download-artifact@v4
-        with:
-          name: backend-image-${{ github.sha }}
-          path: .local/packages
-      - run: docker load --input .local/packages/backend-image.tar
+          node: 'true'
+      - run: dotnet tool restore
+      - run: dotnet restore src/Starter.slnx --locked-mode
       - run: npm ci --prefix src/frontend
-      - name: Migrate a disposable database, generate clients, smoke-test packaged backend
-        env:
-          GENERATE_CLIENTS: '1'
-          FRONTEND_IMAGE: ''
-        run: ./tools/ci/test-packages.sh
+      # Exports OpenAPI from the built Host with the Swashbuckle CLI; no running API or database is needed.
+      - run: npm run generate --prefix src/frontend
+      - run: node tools/ci/archive-clients.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: api-clients-${{ github.sha }}
@@ -92,11 +77,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: ./.github/actions/setup
         with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: src/frontend/package-lock.json
+          dotnet: 'false'
+          node: 'true'
       - uses: actions/download-artifact@v4
         with:
           name: api-clients-${{ github.sha }}
@@ -104,11 +88,9 @@ jobs:
       - run: tar -xzf .local/packages/api-clients.tar.gz -C src/frontend
       - name: Build frontend with generated clients and package nginx image
         run: ./tools/ci/package-frontend.sh
-      - uses: actions/download-artifact@v4
+      - uses: ./.github/actions/load-image
         with:
-          name: backend-image-${{ github.sha }}
-          path: .local/packages
-      - run: docker load --input .local/packages/backend-image.tar
+          component: backend
       - name: Smoke-test both packages and the frontend API proxy
         run: ./tools/ci/test-packages.sh
       - uses: actions/upload-artifact@v4
@@ -128,17 +110,14 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/download-artifact@v4
+      # Local actions need the repository checked out.
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/load-image
         with:
-          name: backend-image-${{ github.sha }}
-          path: packages
-      - uses: actions/download-artifact@v4
+          component: backend
+      - uses: ./.github/actions/load-image
         with:
-          name: frontend-image-${{ github.sha }}
-          path: packages
-      - run: |
-          docker load --input packages/backend-image.tar
-          docker load --input packages/frontend-image.tar
+          component: frontend
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
