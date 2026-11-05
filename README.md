@@ -70,7 +70,7 @@ dotnet run --project src/backend/MigrationRunner
 
 MigrationRunner migrates modules in name order. Modules must remain independent at the database level. New migrations, their designers and snapshots are tracked. There is no automatic schema mutation during API startup.
 
-After changing controllers or DTOs, with the backend running:
+After changing controllers or DTOs (no running backend or database needed):
 
 ```bash
 cd src/frontend
@@ -78,7 +78,7 @@ npm run generate
 npm run build
 ```
 
-OpenAPI specs and generated clients are ignored and must be regenerated; never hand-edit them. Frontend module directories and API group names are lowercase. Backend module names use PascalCase.
+`generate` builds the Host and exports each module's OpenAPI document with the Swashbuckle CLI (a local `dotnet tool`), then runs NSwag. OpenAPI specs and generated clients are ignored and must be regenerated; never hand-edit them. Frontend module directories and API group names are lowercase. Backend module names use PascalCase.
 
 ## Checks
 
@@ -94,11 +94,11 @@ npm uses `npm ci`; NuGet restores with committed `packages.lock.json` files and 
 
 ## Package pipeline
 
-GitHub Actions runs the stages in order:
+GitHub Actions runs these stages; API clients are generated in parallel with the backend stages:
 
 1. **Backend tests** with Release configuration and saved TRX results.
 2. **Backend package**: publish the host and MigrationRunner, then build one .NET runtime Docker image.
-3. **API clients**: run that packaged backend against disposable PostgreSQL, apply migrations, fetch OpenAPI and run NSwag. Archive the specs and generated clients and smoke-test authentication.
+3. **API clients**: build the Host, export each module's OpenAPI document with the Swashbuckle CLI (no running API or database) and run NSwag. Archive the specs and generated clients.
 4. **Frontend package**: download the generated clients, build TypeScript/Vite and package the static files in nginx. Test both packaged applications together, including SPA routing and authentication through the frontend proxy.
 5. **Publish packages**: push those exact tested images to GitHub Container Registry, without rebuilding.
 
